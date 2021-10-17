@@ -1,0 +1,124 @@
+ ---- Mains points to implement ----
+
+
+Overall Operation : 
+request --->
+............ (may include proxies, etc)
+<------ response
+
+
+Mechanisms specified in the augmented BNF form 
+
+URI consists of URN and URL --> generally URL is used 
+
+->http url format :
+http_URL = "http:" "//" host [ ":" port ] [ abs_path [ "?" query ]]
+
+->Character Sets:
+ method used to convert sequence of octets into sequence of characters
+
+->Content Codings:
+  indicates encoding which can be applied to an entity ---> used to compress the document
+  --> gzip, compress, deflate, identity
+
+->transfer codings:
+  used to indicate an encoding transformation that has been, can be, or may need to be applied to an
+  entity-body in order to ensure "safe transport" through the network 
+  # Whenever a transfer-coding is applied to a message-body, the set of
+   transfer-codings MUST include "chunked"
+
+->Media Types:
+  provide open and extensible data typing and type negotiation.
+
+->qvalue :
+  value from 0 to 1.0  ( giving quality or priority to various parameters)
+
+->language tags  :  indicates the language preferable for communication
+
+->Etag : unique id number for each entity
+
+
+
+-->HTTP MESSAGE TYPE:
+	HTTP-message   = Request | Response     ; HTTP/1.1 messages
+
+Different headers : 
+
+general-header = Cache-Control            
+                      | Connection               
+                      | Date                     
+                      | Pragma                   
+                      | Trailer                  
+                      | Transfer-Encoding        
+                      | Upgrade                  
+                      | Via                      
+                      | Warning 
+
+
+Method      = "OPTIONS"                
+                      | "GET"                    
+                      | "HEAD"                   
+                      | "POST"                   
+                      | "PUT"                    
+                      | "DELETE"                 
+                      | "TRACE"                  
+                      | "CONNECT"                
+                      | extension-method
+       extension-method = token
+
+
+request-header = Accept                   
+                      | Accept-Charset           
+                      | Accept-Encoding          
+                      | Accept-Language          
+                      | Authorization            
+                      | Expect                   
+                      | From                     
+                      | Host                     
+                      | If-Match
+                      | If-Modified-Since        
+                      | If-None-Match            
+                      | If-Range                 
+                      | If-Unmodified-Since      
+                      | Max-Forwards             
+                      | Proxy-Authorization      
+                      | Range                    
+                      | Referer                  
+                      | TE                       
+                      | User-Agent
+
+
+response-header = Accept-Ranges           
+                       | Age                     
+                       | ETag                    
+                       | Location                
+                       | Proxy-Authenticate      
+                       | Retry-After             
+                       | Server                  
+                       | Vary                    
+                       | WWW-Authenticate
+
+entity-header  = Allow                    
+                      | Content-Encoding         
+                      | Content-Language         
+                      | Content-Length           
+                      | Content-Location         
+                      | Content-MD5              
+                      | Content-Range            
+                      | Content-Type             
+                      | Expires                  
+                      | Last-Modified            
+                      | extension-header
+
+
+->Status Codes types:
+
+1XX -> Informational
+2XX -> Successfull
+3XX -> Rediraction
+4XX -> Client Error
+5XX -> Server Error
+
+
+
+
