@@ -1,4 +1,3 @@
-
 import socket
 import os
 from err import *
@@ -12,17 +11,54 @@ import brotli
 from Error_codes import status_codes
 from pathlib import Path
 import traceback
-import uuid
+from uuid import uuid4
 from hashlib import md5
+from urllib.parse import parse_qs
+from pandas import DataFrame
+import threading
+
 
 DOCUMENT_ROOT = str(Path().resolve())
-
+PORT_NUMBER = 12008
 
 class TCPServer:
 
 	def __init__(self, host, port):
 		self.host = host
 		self.port = port
+
+	def connection(self,conn,addr):
+		print("THREAD STARTED")
+		data = b""
+		conn.settimeout(10)
+		while True:
+			try:	
+				data = conn.recv(10000000)
+				headers = self.get_headers(data)
+				content = headers["data"]
+				if "Content-Length" in headers:
+					length = int(headers["Content-Length"])
+					while(length > len(content)):
+						print("yes")
+						content += conn.recv(10000000)
+						print(len(content))
+				response,resource = self.handle_request(content,headers,data+content)
+				print("between")
+				conn.send(response.encode('ISO-8859-1'))
+				if resource:
+					print("done")
+					conn.send(resource)
+				if "Connection" in headers and headers["Connection"] == "keep-alive":
+					print("sssssssssssssssssssssssssssssssss")
+					continue
+				else:
+					conn.close()
+					break
+						
+			except socket.timeout:
+				print("khaire")
+				conn.close()
+				break
       
 
 	def start(self):
@@ -37,64 +73,41 @@ class TCPServer:
 		while True:
 			conn, addr = s.accept()
 			print("Connected by", addr)
-			data = conn.recv(10485760) 
-			data1 = conn.recv(10485760) 
-			#print(data,data1)
-			data = data+data1
+			th = threading.Thread(target=self.connection,args=(conn,addr))
+			th.start()
 
-			response,resource = self.handle_request(data)
-			conn.send(response.encode('ISO-8859-1'))
-			if resource:
-				conn.send(resource)
-			conn.close()
-	
-	def handle_request(self, data):
+			
+	def handle_request(self, data,headers,request):
 		return data
+	
+	def get_headers(self,data):
+		pass
 
         
 class HTTPServer(TCPServer):
-	def __init__(self, host='127.0.0.1', port=12004,allowedMethods=['GET','HEAD','POST','PUT','DELETE']):
+	def __init__(self, host='127.0.0.1', port=PORT_NUMBER,allowedMethods=['GET','HEAD','POST','PUT','DELETE']):
 		self.allowedMethods = allowedMethods
 		self.isService = True
 		self.isSystemOk = True
 		
 		TCPServer.__init__(self,host,port)
 
-	def handle_request(self, data):
+	def get_headers(self,data):
 		raw_data = data.decode("ISO-8859-1")
 		http_req = HTTPRequest(raw_data)
-		
-		isError, status_code = self.checkForErrors(http_req.headers_request,raw_data)
+		http_req.headers_request["data"] = data[data.index(b"\r\n\r\n")+4:]
+		return http_req.headers_request
+
+	def handle_request(self, data,headers_req,request):
+		isError, status_code = self.checkForErrors(headers_req,request.decode("ISO-8859-1"))
 		
 		print(isError,status_code,"yes")
 		
-		headers_req = http_req.headers_request
-		headers_req["request"] = data
+		headers_req = headers_req
+		headers_req["data"] = data
 		
-		'''if "Accept" in headers_req:
-			accept = http_req["Accept"]
-			accept_options = accept.split(",")
-			q_val = {}
-			
-			for entry in accept_options:
-				entry = entry.split(";")
-				if(len(entry) == 1):
-					q_val[entry[0]] = 1
-				else:
-					q_val[entry[0]] = entry[1]
-				type_list = [k for k,v in sorted(q_val.items(), key=lambda item: item[1])]
-				
-				for i in range(len(type_list)):
-					type_list[i] = type_list[i].split("/")
-				
-				####
-				#checking if filetype is available in the given type and subtype
-				####
-				
-		else:
-			isCorrect = False
-			status_code = 406
-		
+
+		'''		
 		if "Accept-Language" in headers_req:
 			accept = http_req["Accept"]
 			accept_options = accept.split(",")
@@ -166,7 +179,7 @@ class HTTPServer(TCPServer):
 			return True,503
 		elif(len((headers_req["request_line"])[1]) > 2000):
 			return True,414
-		elif(len((data.split("/r/n/r/n"))[0]) > 10000):
+		elif(len((data.split("/r/n/r/n"))[0]) > 10000000):
 			return True,431
 		elif(not self.isImplemented(headers_req)):
 			return True,501
@@ -226,6 +239,7 @@ class HTTPServer(TCPServer):
 		"Set-Cookie",
 		"Transfer-Encoding",
 		"Connection",
+		"Referer",
 		"Keep-Alive",
 		"Postman-Token",
 		"Allow"]
@@ -280,10 +294,11 @@ class HTTPRequest:
 	#parsing the http request
 	def parse(self,data):
 		
-		#print('sanket='+data)
+		print('sanket='+data)
 		headers = data.split("\r\n")
-		
+
 		request_line = headers[0]
+		print('\n request line',request_line,'\n')
 		request_line_list = request_line.split(" ")
 		self.method = request_line_list[0]
 		self.uri = request_line_list[1]
@@ -300,8 +315,7 @@ class HTTPRequest:
 			headers_list[temp[0]] = temp[1].strip()
 		
 		headers_list["request_line"] = request_line_list
-		headers_list["data"] = data[data.index("\r\n\r\n")+4:]
-		#print(headers_list)
+		print(headers_list)
 			
 		return headers_list
 		
@@ -325,7 +339,21 @@ class httpresponse:
 		self.response["headers"]["Server"] = "MY_HTTP_SERVER"
 		
 		self.response["status_code"] = None
+
+		if "Connection" not in self.headers:
+					self.response["headers"]["Connection"] = "Close"
+		elif self.headers["Connection"] == "Close":
+				self.response["headers"]["Connection"] = "Close"
+		else:
+				self.response["headers"]["Connection"] = "Keep-Alive"
+
 		
+		if 'Cookie' not in self.headers:
+			biscuit_id = uuid4().hex
+			Max_Age = 30
+			Path = '/'
+			Domain = ''
+			self.response['headers']['Set-Cookie'] = f'biscuit={biscuit_id}; Max-Age={Max_Age}; Path={Path}; Domain={Domain}'
 		
 		if(not self.isError and self.status_code ==  100):
 			self.response = {}
@@ -381,12 +409,75 @@ class httpresponse:
 				return self.response
 				
 			else:
+
+				if not os.access(filePath,os.R_OK):
+					self.isError = False
+					self.status_code = 405
+					self.error_response()
+					return self.response
 				
-				filep = open(filePath,'rb')
-				
-				self.resource = filep.read()
-				filep.close()
-				
+				charset = None
+				if "Accept-Charset" in self.headers:
+					if self.headers["Accept-Charset"] in ['utf-8','ISO-8859-1']:
+						charset = self.headers["Accept-Charset"]
+					else:
+						self.isError = True
+						self.status_code = 406
+						self.error_response()
+						return self.response
+				else:
+					charset = 'ISO-8859-1'
+
+
+				if "Accept" in self.headers:
+					accept = self.headers["Accept"]
+					accept_options = accept.split(",")
+					q_val = {}
+					
+					for entry in accept_options:
+						entry = entry.split(";")
+						if(len(entry) == 1):
+							q_val[entry[0]] = 1.0
+						else:
+							q_val[entry[0]] = float(entry[1].split('=')[1])
+					
+					print(q_val)
+					type_list = [k for k,v in sorted(q_val.items(), key=lambda item: item[1],reverse=True)]
+					print(type_list)
+					file = fileName.split('.')[0]
+					print("\n",file,"\n")
+					isAvailable = False
+					for i in type_list:
+						if(i == '*/*'):
+							print('i am in "*/*"')
+							filep = open(filePath,'r')
+							self.resource = bytes(filep.read(),charset)
+							isAvailable = True
+							break
+						if os.path.exists(DOCUMENT_ROOT+'/'+file+'.'+i.split('/')[1]):
+							filep = open(DOCUMENT_ROOT+'/'+file+'.'+i.split('/')[1],'r')
+							self.resource = bytes(filep.read(),charset)
+							isAvailable = True
+							print("here")
+							break
+					
+					if (not isAvailable):
+						self.isError = False
+						self.status_code = 406
+						self.error_response()
+						return self.response
+
+						####
+						#checking if filetype is available in the given type and subtype
+						####
+					
+				else:
+					filep = open(filePath,'r')
+					self.resource = bytes(filep.read(),charset)
+
+				#if "Accept-Charset" in self.headers :
+
+			
 				last_modified_time = os.path.getmtime(filePath)
 				last_modified = time.strftime("%a, %d %b %Y %H:%M:%S GMT",time.gmtime(last_modified_time))
 				
@@ -497,12 +588,6 @@ class httpresponse:
 					if "text" in content_type:
 						self.response["headers"]["Content-Type"] += "; charset=UTF-8"
 					
-				if "Connection" not in self.headers:
-					self.response["headers"]["Connection"] = "Close"
-				elif self.headers["Connection"] == "Close":
-					self.response["headers"]["Connection"] = "Close"
-				else:
-					self.response["headers"]["Connection"] = "Keep-Alive"
 				
 				self.response["headers"]["Content-md5"] = md5(self.resource).hexdigest() 
 
@@ -564,12 +649,10 @@ class httpresponse:
 			
 
 			if(uri == "/"):
-				filePath = "/index.html"
+				filePath = DOCUMENT_ROOT
 			else:
-				filePath = uri.split("?")[0]
-				
-			fileName = filePath.split("/")[-1]
-			filePath = DOCUMENT_ROOT + "/" + fileName
+				if '.' in uri:
+					filePath = DOCUMENT_ROOT+uri.split('/')[-1]
 
 			if(not os.path.exists(filePath)):
 				self.status_code = 201
@@ -577,8 +660,14 @@ class httpresponse:
 				self.status_code = 204
 
 			post_data,isTrue = self.parse_type_POST()
+
 			if(isTrue):
-				file = open(filePath,'a')
+				if not os.access(DOCUMENT_ROOT+'/'+"logs.txt",os.W_OK):
+					self.isError = True
+					self.status_code = 403
+					self.error_response()
+					return self.response
+				file = open(DOCUMENT_ROOT+'/logs.txt','a')
 				file.write(str(post_data))
 				file.close()
 
@@ -586,13 +675,6 @@ class httpresponse:
 
 			self.response["status_code"] = self.status_code
 			self.response["reason_phrase"] = status_codes[self.status_code][0]
-
-			if "Connection" not in self.headers:
-					self.response["headers"]["Connection"] = "Close"
-			elif self.headers["Connection"] == "Close":
-					self.response["headers"]["Connection"] = "Close"
-			else:
-					self.response["headers"]["Connection"] = "Keep-Alive"
 				
 		
 		except Exception as e:
@@ -602,26 +684,91 @@ class httpresponse:
 			self.status_code = 404
 			self.error_response()
 
+
 	def PUT_response(self):
-		pass
+		try:
+
+			filePath = DOCUMENT_ROOT + '/'+self.headers["request_line"][1]
+			file = None
+			if os.path.exists(filePath):
+				if os.access(filePath,os.W_OK):
+					file = open(filePath,'w')
+					self.status_code = 204	
+				else:
+					self.isError = True
+					self.status_code = 403
+					self.error_response()
+					return self.response
+			
+			else:
+				self.status_code = 201
+
+			print(len(self.headers["data"]))
+			if 'text' in self.headers["Content-Type"]:
+				file = open(filePath,'w')
+				file.write(self.headers["data"].decode('ISO-8859-1'))
+			else:
+				file = open(filePath,'wb')
+				file.write(self.headers["data"])
+
+			self.response["status_code"] = self.status_code
+			self.response["reason_phrase"] = status_codes[self.status_code][0]
+
+
+		except Exception as e:
+			traceback.print_exc()
+			print(e)
+			self.response = {}
+			self.status_code = 404
+			self.error_response()
+			
 
 	def DELETE_response(self):
-		pass
+		try:
+			filePath = DOCUMENT_ROOT + '/'+self.headers["request_line"][1]
+			folder = DOCUMENT_ROOT
+			if len(self.headers["request_line"][1].split('/')) > 2:
+				for l in self.headers["request_line"][1].split('/')[1:-1]:
+					folder += '/'+l
+
+			if os.path.exists(filePath):
+				if(os.access(folder,os.W_OK)):
+					os.remove(filePath)
+					self.status_code = 204
+				else:
+					self.isError = True
+					self.status_code = 403
+					self.error_response()
+					return self.response
+
+			else:
+				self.isError = True
+				self.status_code = 404
+				self.error_response()
+				return self.response
+
+			self.response["status_code"] = self.status_code
+			self.response["reason_phrase"] = status_codes[self.status_code][0]
+			
+		except Exception as e:
+			traceback.print_exc()
+			print(e)
+			self.response = {}
+			self.status_code = 404
+			self.error_response()
 
 
 	def parse_type_POST(self):
 		if (self.headers["Content-Type"] == "application/x-www-form-urlencoded"):
-			key_val = self.headers["data"].split('&')
-			file_data = {}
-			print("key-val ===" ,key_val)
-			for entry in key_val:
-				entry = entry.split('=')
-				file_data[entry[0]] = entry[1]
+			key_val = parse_qs(self.headers["data"].decode('ISO-8859-1'))
+			file_data = DataFrame(key_val.items())
+			self.status_code = 303
+			self.response["headers"]["Location"] = f"http://127.0.0.1:{PORT_NUMBER}/welcome.txt"
 			return file_data,"True"
 					
 		elif ("multipart/form-data" in self.headers["Content-Type"]):
 			boundry = bytes('--'+self.headers["Content-Type"].split("=")[-1],'ISO-8859-1')
-			raw_data = self.headers["request"][self.headers["request"].index(b"\r\n\r\n")+4:]
+			raw_data = self.headers["data"]
 			multi_forms = raw_data.split(boundry)[1:-1]
 			#print(boundry)
 			#print("\nlst = ",multi_forms,"\n")
@@ -635,7 +782,8 @@ class httpresponse:
 					if b"form-data" in form_headers[0] and b"filename" not in form_headers[0]:
 						isTrue = True
 						received_data = lst[1].decode('ISO-8859-1')
-						total_data[form_headers[0][form_headers[0].index(b' name=')+ 7].decode('ISO-8859-1')] = received_data
+						total_data[form_headers[0][form_headers[0].index(b' name=')+ 7:].decode('ISO-8859-1')] = received_data
+
 
 				if len(form_headers) > 1 and b"Content-Type" in form_headers[1]:
 					print("i m in")
@@ -646,8 +794,7 @@ class httpresponse:
 					elif b"file" in form_headers[0]:
 						filename = form_headers[0][form_headers[0].index(b"filename")+10:-1]
 					
-					filepath = DOCUMENT_ROOT+'/'+filename.decode()
-					self.status_code = 200
+					filepath = DOCUMENT_ROOT+'/database/'+filename.decode()
 
 					if b"text" in filetype:
 						print("txt")
@@ -662,8 +809,20 @@ class httpresponse:
 						file = open(filepath,'ab')
 						file.write(received_data)
 						file.close()
+		
+			self.status_code = 303
+
+			self.response["headers"]["Location"] = f"http://127.0.0.1:{PORT_NUMBER}/welcome.txt"
 			
 			return total_data,isTrue
+
+		elif '.' in self.headers["request_line"][1]:
+			path = '/'+self.headers["request_line"][1].split('/')[-1]
+			file = open(DOCUMENT_ROOT+path,'a')
+			file.write(self.headers["data"].decode())
+			self.response["headers"]["Content-Location"] = f"/{path}"
+			return None,False
+
 
 		
 if __name__ == '__main__':
