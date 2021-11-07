@@ -1,0 +1,16 @@
+[biscuit=b6baa48104b6433d8e2f2c7c425d3d39 ,clientIP=127.0.0.1, clientSocket=50792] : 5
+[biscuit=a80d18b880b543d1bdcd2059ce2795ca ,clientIP=127.0.0.1, clientSocket=50804] : 5
+[biscuit=ab46a8dcba5f46729dfc5df1f85555a8 ,clientIP=127.0.0.1, clientSocket=50816] : 7
+[biscuit=d5f3acef81034e18badb202437a154c0 ,clientIP=127.0.0.1, clientSocket=39864] : 1
+[biscuit=b9d709641ef9469b906344824679bbc0 ,clientIP=127.0.0.1, clientSocket=41752] : 1
+[biscuit=3e44470089a94696af19123f22a252f3 ,clientIP=127.0.0.1, clientSocket=41754] : 4
+[biscuit=ed06c56ca833456bb957c99386d3c583 ,clientIP=127.0.0.1, clientSocket=41784] : 1
+[biscuit=32f14a02f72d45c8886ed3b1a321d716 ,clientIP=127.0.0.1, clientSocket=41790] : 1
+[biscuit=241ad9fff8ef423babccd1e34c327241 ,clientIP=127.0.0.1, clientSocket=42022] : 2
+[biscuit=248dd95ee6ee48c7bc1d34889598722f ,clientIP=127.0.0.1, clientSocket=42030] : 2
+[biscuit=d57ca7ed6bc04838ae90cdd64cd4d2e2 ,clientIP=127.0.0.1, clientSocket=42052] : 2
+[biscuit=ca4d192fe4ff4496ac66740cb77ac0b1 ,clientIP=127.0.0.1, clientSocket=42056] : 1
+[biscuit=c8af6e8009614b19ab5a9f2352b16aeb ,clientIP=127.0.0.1, clientSocket=42058] : 1
+[biscuit=cdb7cef5301c4b92bf69fef9293e767f ,clientIP=127.0.0.1, clientSocket=43618] : 2
+[biscuit=c489ce4b4f8b4b24a79b04a5fd2dd7b6 ,clientIP=127.0.0.1, clientSocket=43670] : 1
+[biscuit=2ca1e76d1a15402f8061d3b068cfc9a8 ,clientIP=127.0.0.1, clientSocket=43712] : 1
