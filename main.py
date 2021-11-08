@@ -7,6 +7,7 @@ from response import *
 import serverconfig
 import logging
 from logs import logger
+from datetime import datetime
 
 
 DOCUMENT_ROOT = serverconfig.DOCUMENT_ROOT
@@ -23,11 +24,14 @@ class TCPServer:
 		print("THREAD STARTED")
 		print("nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn")
 		logger.debug('SERVER STARTED',{'process':os.getpid(),'thread':threading.get_ident()})
-		data = b""
 		conn.settimeout(10)
+		
 		while True:
-			try:	
-				data = conn.recv(10000000)
+			try:
+				data = b""
+				while(len(data) == 0):
+					data = conn.recv(10000000)
+				print("\nno ",data," no\n")
 				headers = self.get_headers(data)
 				content = headers["data"]
 				if "Content-Length" in headers:
@@ -123,6 +127,7 @@ class HTTPServer(TCPServer):
 				####
 								
 		else:
+			logger.error(status_codes[406][1],{'process':os.getpid(),'thread':threading.get_ident()})
 			isError = False
 			status_code = 406
 			
@@ -252,6 +257,7 @@ class HTTPServer(TCPServer):
 		return False
 	
 if __name__ == '__main__':
-	print(os.getpid())
 	server = HTTPServer()
 	server.start()
+    
+    

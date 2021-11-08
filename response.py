@@ -29,6 +29,7 @@ class httpresponse:
 		self.status_code = status_code
 		self.response = {"headers" :{}}
 		self.resource = None
+		self.threadLock = threading.Lock()
 		
 	'''Content-type,content-length,content-location content-md5, Date, keep-Alive, Allow, Connection, Transfer-Encoding, Set-Cookie, Server, location, last-modified, expires, Etag,  '''
 	
@@ -48,36 +49,9 @@ class httpresponse:
 		else:
 				self.response["headers"]["Connection"] = "Keep-Alive"
 
-		
-		if 'Cookie' not in self.headers:
-			biscuit_id = uuid4().hex
-			Max_Age = 5
-			Path = '/'
-			Domain = ''
-			self.response['headers']['Set-Cookie'] = f'biscuit={biscuit_id}; Max-Age={Max_Age}; Path={Path}; Domain={Domain}'
-			cookie_file = open(DOCUMENT_ROOT+'/cookie.txt','a')
-			newcookie = f'[biscuit={biscuit_id} ,clientIP={self.headers["addr"][0]}, clientSocket={self.headers["addr"][1]}] : 1\n'
-			cookie_file.write(newcookie)
-			cookie_file.close()
-
-		else:
-			cookie_file = open(DOCUMENT_ROOT+'/cookie.txt','r')
-			cookiedata = cookie_file.readlines()
-			print(cookiedata)
-			print(self.headers["Cookie"])
-			for entryNo in range(len(cookiedata)):
-				print("looooooooooooop")
-				if self.headers['Cookie'] in cookiedata[entryNo]:
-					print("innnnnnnnnn")
-					cookie, count = cookiedata[entryNo].split(':')
-					cookiedata[entryNo] = cookie + ': ' + str(int(count.strip()) + 1)+'\n'
-					break
-			cookie_file.close()
-			cookie_file = open(DOCUMENT_ROOT+'/cookie.txt','w')
-			cookie_file.writelines(cookiedata)
-			cookie_file.close()
-				
-
+		self.threadLock.acquire()
+		self.handleCookie()
+		self.threadLock.release()
 
 		if(not self.isError and self.status_code ==  100):
 			self.response = {}
@@ -100,7 +74,17 @@ class httpresponse:
 			self.PUT_response()
 		elif(method == "DELETE"):
 			self.DELETE_response()
-			
+
+		self.threadLock.acquire()
+		logfile = open('access.log','a')
+		now = datetime.now().strftime("%d/%b/%Y:%H:%M:%S %z")
+		length = self.response['headers']['Content-Length'] if 'Content-Length' in self.response['headers'] else 0
+		referer = self.headers['Referer'] if 'Referer' in self.headers else '-'
+		logData = f"{self.headers['addr'][0]} - - [{now}] \"{' '.join(self.headers['request_line'])}\" {self.response['status_code']} {length} \"{referer}\" \"{self.headers['User-Agent']}\""
+		logfile.write(logData+'\n')
+		logfile.close()
+		self.threadLock.release()
+
 		return self.response,self.resource
 		
 			
@@ -137,6 +121,7 @@ class httpresponse:
 				if not os.access(filePath,os.R_OK):
 					self.isError = False
 					self.status_code = 405
+					logger.error('Path does not exist',{'process':os.getpid(),'thread':threading.get_ident()})
 					self.error_response()
 					return self.response
 				
@@ -174,13 +159,17 @@ class httpresponse:
 					for i in type_list:
 						if(i == '*/*'):
 							print('i am in "*/*"')
-							filep = open(filePath,'r')
-							self.resource = bytes(filep.read(),charset)
+							filep = open(filePath,'rb')
+							self.resource = filep.read()
 							isAvailable = True
 							break
 						if os.path.exists(DOCUMENT_ROOT+'/'+file+'.'+i.split('/')[1]):
-							filep = open(DOCUMENT_ROOT+'/'+file+'.'+i.split('/')[1],'r')
-							self.resource = bytes(filep.read(),charset)
+							if (i.split('/')[0] in ['image', 'video','audio']):
+								filep = open(DOCUMENT_ROOT+'/'+file+'.'+i.split('/')[1],'rb')
+								self.resource = filep.read()
+							else:
+								filep = open(DOCUMENT_ROOT+'/'+file+'.'+i.split('/')[1],'r')
+								self.resource = bytes(filep.read(),charset)
 							isAvailable = True
 							print("here")
 							break
@@ -188,6 +177,7 @@ class httpresponse:
 					if (not isAvailable):
 						self.isError = False
 						self.status_code = 406
+						logger.error(status_codes[self.status_code],{'process':os.getpid(),'thread':threading.get_ident()})
 						self.error_response()
 						return self.response
 
@@ -196,8 +186,8 @@ class httpresponse:
 						####
 					
 				else:
-					filep = open(filePath,'r')
-					self.resource = bytes(filep.read(),charset)
+					filep = open(filePath,'rb')
+					self.resource = filep.read()
 
 				#if "Accept-Charset" in self.headers :
 
@@ -225,10 +215,11 @@ class httpresponse:
 				
 				if "If-Modified-Since" in self.headers and preconditionFlag:
 					
-					check_date = self.headers["Date"]
-					check_date = time.strptime(check_date, "%a, %d %b %Y %H:%M:%S GMT")
+					check_date = self.headers["If-Modified-Since"]
+					print(self.headers["If-Modified-Since"])
+					check_date = datetime.strptime(check_date, "%a, %d %b %Y %H:%M:%S %Z")
 					
-					if time.mktime(check_date) > last_modified_time:
+					if time.mktime(check_date.timetuple()) > last_modified_time:
 						preconditionFlag = False
 						self.isError = False
 						self.response["status_code"] = self.status_code = 304
@@ -237,12 +228,12 @@ class httpresponse:
 						self.resource = None
 						return self.response
 				
-				if "If-Unmodified-since" in self.headers and "If-Match" not in self.headers and preconditionFlag:
+				if "If-Unmodified-Since" in self.headers and "If-Match" not in self.headers and preconditionFlag:
 					
-					check_date = self.headers["Date"]
-					check_date = time.strptime(check_date, "%a, %d %b %Y %H:%M:%S GMT")
+					check_date = self.headers["If-Unmodified-Since"]
+					check_date = datetime.strptime(check_date, "%a, %d %b %Y %H:%M:%S GMT")
 					
-					if time.mktime(check_date) < last_modified_time:
+					if time.mktime(check_date.timetuple()) < last_modified_time:
 						preconditionFlag = False
 						self.isError = True
 						self.status_code = 412
@@ -281,8 +272,8 @@ class httpresponse:
 								condition = False
 						else:
 							range_date = self.headers["If-Range"]
-							range_date = time.strptime(check_date, "%a, %d %b %Y %H:%M:%S GMT")
-							if time.mktime(range_date) > last_modified_time:
+							range_date = datetime.strptime(check_date, "%a, %d %b %Y %H:%M:%S GMT")
+							if time.mktime(range_date.timetuple()) > last_modified_time:
 								condition = False
 					
 					if condition:
@@ -330,6 +321,7 @@ class httpresponse:
 			print(e)
 			self.response = {}
 			self.status_code = 404
+			logger.error(status_codes[self.status_code],{'process':os.getpid(),'thread':threading.get_ident()})
 			self.error_response()
 
 
@@ -410,34 +402,49 @@ class httpresponse:
 	def PUT_response(self):
 		try:
 
-			filePath = DOCUMENT_ROOT + '/'+self.headers["request_line"][1]
+			lst = self.headers["request_line"][1].split('/')
+			filePath = DOCUMENT_ROOT
 			file = None
-			if os.path.exists(filePath):
-				if os.access(filePath,os.W_OK):
-					file = open(filePath,'w')
-					self.status_code = 204	
+			if os.path.exists(filePath+'/'.join(lst[:-1])):
+				print('okk',filePath+'/'.join(lst[:-1]))
+				if os.access(filePath+'/'.join(lst[:-1]),os.W_OK):
+					print('okokok')
+					if os.path.exists(filePath+'/'.join(lst)):
+						file = open(filePath,'w')
+						self.status_code = 204	
+					else:
+						self.status_code = 201
+				
 				else:
+					print('no')
 					self.isError = True
 					self.status_code = 403
 					self.error_response()
 					return self.response
-			
-			else:
-				self.status_code = 201
 
-			print(len(self.headers["data"]))
-			if 'text' in self.headers["Content-Type"]:
-				file = open(filePath,'w')
-				file.write(self.headers["data"].decode('ISO-8859-1'))
 			else:
-				file = open(filePath,'wb')
-				file.write(self.headers["data"])
+				print('nono')
+				logger.debug('Path does not exist',{'process':os.getpid(),'thread':threading.get_ident()})
+				self.response = {}
+				self.status_code = 404
+				self.error_response()
+				return
+
+
+			# print(len(self.headers["data"]))
+			# if 'text' in self.headers["Content-Type"]:
+			# 	file = open(filePath + '/'.join(lst),'w')
+			# 	file.write(self.headers["data"].decode('ISO-8859-1'))
+			# else:
+			file = open(filePath + '/'.join(lst),'wb')
+			file.write(self.headers["data"])
 
 			self.response["status_code"] = self.status_code
 			self.response["reason_phrase"] = status_codes[self.status_code][0]
 
 
 		except Exception as e:
+			print(e,'exception')
 			logger.debug(e,{'process':os.getpid(),'thread':threading.get_ident()})
 			self.response = {}
 			self.status_code = 404
@@ -458,6 +465,7 @@ class httpresponse:
 					self.status_code = 204
 				else:
 					self.isError = True
+					logger.error('Not permitted',{'process':os.getpid(),'thread':threading.get_ident()})
 					self.status_code = 403
 					self.error_response()
 					return self.response
@@ -465,6 +473,7 @@ class httpresponse:
 			else:
 				self.isError = True
 				self.status_code = 404
+				logger.error('Path does not exist',{'process':os.getpid(),'thread':threading.get_ident()})
 				self.error_response()
 				return self.response
 
@@ -543,3 +552,29 @@ class httpresponse:
 			file.write(self.headers["data"].decode())
 			self.response["headers"]["Content-Location"] = f"/{path}"
 			return None,False
+
+	def handleCookie(self):
+		if 'Cookie' not in self.headers:
+			biscuit_id = uuid4().hex
+			Max_Age = 5
+			Path = '/'
+			Domain = ''
+			self.response['headers']['Set-Cookie'] = f'biscuit={biscuit_id}; Max-Age={Max_Age}; Path={Path}; Domain={Domain}'
+			cookie_file = open(DOCUMENT_ROOT+'/cookie.txt','a')
+			newcookie = f'[biscuit={biscuit_id} ,clientIP={self.headers["addr"][0]}, clientSocket={self.headers["addr"][1]}] : 1\n'
+			cookie_file.write(newcookie)
+			cookie_file.close()
+
+		else:
+			cookie_file = open(DOCUMENT_ROOT+'/cookie.txt','r')
+			cookiedata = cookie_file.readlines()
+			for entryNo in range(len(cookiedata)):
+				if self.headers['Cookie'] in cookiedata[entryNo]:
+					print("innnnnnnnnn")
+					cookie, count = cookiedata[entryNo].split(':')
+					cookiedata[entryNo] = cookie + ': ' + str(int(count.strip()) + 1)+'\n'
+					break
+			cookie_file.close()
+			cookie_file = open(DOCUMENT_ROOT+'/cookie.txt','w')
+			cookie_file.writelines(cookiedata)
+			cookie_file.close()
