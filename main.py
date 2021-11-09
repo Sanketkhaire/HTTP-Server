@@ -24,14 +24,13 @@ class TCPServer:
 		print("THREAD STARTED")
 		print("nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn")
 		logger.debug('SERVER STARTED',{'process':os.getpid(),'thread':threading.get_ident()})
-		conn.settimeout(10)
+		conn.settimeout(5)
 		
 		while True:
 			try:
 				data = b""
 				while(len(data) == 0):
 					data = conn.recv(10000000)
-				print("\nno ",data," no\n")
 				headers = self.get_headers(data)
 				content = headers["data"]
 				if "Content-Length" in headers:
@@ -64,7 +63,7 @@ class TCPServer:
 
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-		s.bind((self.host, self.port))
+		s.bind((self.host, int(self.port)))
 		s.listen(10)
 		
 		print("Listening at", s.getsockname())
@@ -98,13 +97,11 @@ class HTTPServer(TCPServer):
 		return http_req.headers_request
 
 	def handle_request(self, data,headers_req,request):
-		isError, status_code = self.checkForErrors(headers_req,request.decode("ISO-8859-1"))
-		
-		print(isError,status_code,"yes")
-		
 		headers_req = headers_req
 		headers_req["data"] = data
-		
+
+		isError, status_code = self.checkForErrors(headers_req,request.decode("ISO-8859-1"))
+		print(isError,status_code,"yes")
 		
 		if "Accept-Encoding" in headers_req:
 			accept = headers_req["Accept-Encoding"]
@@ -117,19 +114,14 @@ class HTTPServer(TCPServer):
 					q_val[entry[0]] = 1.0
 				else:
 					q_val[entry[0]] = float(entry[1].split('=')[1])
-			encoding_list = [k for k,v in sorted(q_val.items(), key=lambda item: item[1])]
+			encoding_list = [k for k,v in sorted(q_val.items(), key=lambda item: item[1],reverse=True)]
 
 			print("Encoding list --------------",encoding_list)
-			headers_req["Accept-Encoding"] = encoding_list[0]
+			headers_req["Accept-Encoding"] = encoding_list
 	
 				####
 				#checking if object is available in the given language
 				####
-								
-		else:
-			logger.error(status_codes[406][1],{'process':os.getpid(),'thread':threading.get_ident()})
-			isError = False
-			status_code = 406
 			
 		
 		httpResponseObject = httpresponse(headers_req,isError,status_code)
@@ -149,6 +141,8 @@ class HTTPServer(TCPServer):
 		
 		
 	def checkForErrors(self,headers_req, data):
+		if(headers_req['request_line'][2] not in ['HTTP/1.1','HTTP/1.0']):
+			return True, 505
 		if(self.isService == False):
 			return True,503
 		elif(len((headers_req["request_line"])[1]) > 2000):
@@ -156,14 +150,14 @@ class HTTPServer(TCPServer):
 		elif(len((data.split("/r/n/r/n"))[0]) > 10000000):
 			return True,431
 		elif(not self.isImplemented(headers_req)):
-			return False,None
+			return True,501
 		elif(not self.checkExpect(headers_req)):
 			return True,417
 		elif(not self.isSystemOk):
 			return True,500
 		elif(not self.isMethodAllowed(headers_req["request_line"][0])):
 			return True,405
-		elif(self.isPayloadLarge(data,headers_req)):
+		elif(self.isPayloadLarge(headers_req)):
 			return True,413
 		elif(self.isForbidden(headers_req)):
 			return True,403
@@ -180,7 +174,7 @@ class HTTPServer(TCPServer):
 		elif("Expect" in headers_req and headers_req["Expect"] == "100-continue"):
 			return False,100
 		'''
-		
+		print('NO ERROR')
 		return False,None
 		
 		
@@ -221,6 +215,7 @@ class HTTPServer(TCPServer):
 		headers_list = list(headers_req.keys())
 		headers_list.remove("request_line")
 		headers_list.remove("data")
+		headers_list.remove("addr")
 		for header in headers_list:
 			if(header not in valid_headers):
 				print("header",header)
@@ -240,15 +235,13 @@ class HTTPServer(TCPServer):
 			return False
 	
 	
-	def isPayloadLarge(self,data,headers_req):
-		data_list = data.split("/r/n/r/n")
-		
-		if(headers_req["request_line"] == "HEAD"):
+	def isPayloadLarge(self,headers_req):
+		print('check payload')
+		if(headers_req["request_line"][0] == "HEAD"):
 			return False
-		elif(len(data_list) <= 1):
-			return False
-		elif(len(data_list[1]) > 100000):
+		elif(len(headers_req['data']) > 10000):
 			return True 
+		print('lol')
 
 	def isMediaTypeSupported(self,Cont_type, cont_encod):
 		return True

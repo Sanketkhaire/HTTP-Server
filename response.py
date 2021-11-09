@@ -8,7 +8,6 @@ import gzip
 import zlib
 import brotli
 from Error_codes import status_codes
-from pathlib import Path
 import traceback
 from uuid import uuid4
 from hashlib import md5
@@ -21,6 +20,10 @@ import serverconfig
 DOCUMENT_ROOT = serverconfig.DOCUMENT_ROOT
 PORT_NUMBER = 12008
 COOKIE_LOG = 'cookie.txt'
+ERROR_LOG = serverconfig.ERROR_LOG
+ACCESS_LOG = serverconfig.ACCESS_LOG
+
+
 
 class httpresponse:
 	def __init__(self,headers,isError,status_code):
@@ -76,7 +79,7 @@ class httpresponse:
 			self.DELETE_response()
 
 		self.threadLock.acquire()
-		logfile = open('access.log','a')
+		logfile = open(ACCESS_LOG,'a')
 		now = datetime.now().strftime("%d/%b/%Y:%H:%M:%S %z")
 		length = self.response['headers']['Content-Length'] if 'Content-Length' in self.response['headers'] else 0
 		referer = self.headers['Referer'] if 'Referer' in self.headers else '-'
@@ -120,7 +123,7 @@ class httpresponse:
 
 				if not os.access(filePath,os.R_OK):
 					self.isError = False
-					self.status_code = 405
+					self.status_code = 403
 					logger.error('Path does not exist',{'process':os.getpid(),'thread':threading.get_ident()})
 					self.error_response()
 					return self.response
@@ -154,21 +157,21 @@ class httpresponse:
 					type_list = [k for k,v in sorted(q_val.items(), key=lambda item: item[1],reverse=True)]
 					print(type_list)
 					file = fileName.split('.')[0]
-					print("\n",file,"\n")
 					isAvailable = False
 					for i in type_list:
 						if(i == '*/*'):
-							print('i am in "*/*"')
 							filep = open(filePath,'rb')
 							self.resource = filep.read()
 							isAvailable = True
 							break
 						if os.path.exists(DOCUMENT_ROOT+'/'+file+'.'+i.split('/')[1]):
 							if (i.split('/')[0] in ['image', 'video','audio']):
-								filep = open(DOCUMENT_ROOT+'/'+file+'.'+i.split('/')[1],'rb')
+								filePath = DOCUMENT_ROOT+'/'+file+'.'+i.split('/')[1]
+								filep = open(filePath,'rb')
 								self.resource = filep.read()
 							else:
-								filep = open(DOCUMENT_ROOT+'/'+file+'.'+i.split('/')[1],'r')
+								filePath = DOCUMENT_ROOT+'/'+file+'.'+i.split('/')[1]
+								filep = open(filePath,'r')
 								self.resource = bytes(filep.read(),charset)
 							isAvailable = True
 							print("here")
@@ -202,10 +205,12 @@ class httpresponse:
 				
 				if "If-Match" in self.headers:
 					etags_list = self.headers["If-Match"].split(",")
-					
+					print('etag',etags_list,Etag)
 					if ("*" in etags_list or Etag in etags_list):
+						print('ETAG')
 						preconditionFlag = True
 					else:
+						print('prec  failed')
 						preconditionFlag = False
 						self.isError = True
 						self.status_code = 412
@@ -242,23 +247,43 @@ class httpresponse:
 					
 				if "Accept-Encoding" in self.headers and not "*" in self.headers["Accept-Encoding"]:
 					
-					if self.headers["Accept-Encoding"] == "gzip":
-						self.resource = gzip.compress(self.resource)
+					flag = False
+					for option in self.headers["Accept-Encoding"]:
+						if option == "gzip":
+							self.resource = gzip.compress(self.resource)
+							
+							self.response["headers"]["Content-Encoding"] = "gzip"
+							self.response["headers"]["Content-Length"] = len(self.resource)
+							flag = True
+							break
+							
+						elif option == "deflate":
+							self.resource = zlib.compress(self.resource)
+							
+							self.response["headers"]["Content-Encoding"] = "deflate"
+							self.response["headers"]["Content-Length"] = len(self.resource)
+							flag = True
+							break
 						
-						self.response["headers"]["Content-Encoding"] = "gzip"
-						self.response["headers"]["Content-Length"] = len(self.resource)
+						elif option == "br":
+							self.resource = brotli.compress(self.resource)
+							
+							self.response["headers"]["Content-Encoding"] = "br"
+							self.response["headers"]["Content-Length"] = len(self.resource) 
+							flag = True
+							break
 						
-					elif self.headers["Accept-Encoding"] == "deflate":
-						self.resource = zlib.compress(self.resource)
-						
-						self.response["headers"]["Content-Encoding"] = "deflate"
-						self.response["headers"]["Content-Length"] = len(self.resource)
-					
-					elif self.headers["Accept-Encoding"] == "br":
-						self.resource = brotli.compress(self.resource)
-						
-						self.response["headers"]["Content-Encoding"] = "br"
-						self.response["headers"]["Content-Length"] = len(self.resource) 
+						elif option == "identity":
+							flag = True
+							break
+
+					if not flag:
+						preconditionFlag = False
+						self.isError = True
+						self.status_code = 406
+						self.error_response()
+						return self.response
+
 						
 				
 				self.response["headers"]["Accept-Ranges"] = "bytes"
@@ -410,8 +435,48 @@ class httpresponse:
 				if os.access(filePath+'/'.join(lst[:-1]),os.W_OK):
 					print('okokok')
 					if os.path.exists(filePath+'/'.join(lst)):
-						file = open(filePath,'w')
-						self.status_code = 204	
+						if os.access(filePath+'/'.join(lst),os.W_OK):
+							last_modified_time = os.path.getmtime(filePath+'/'.join(lst))
+							preconditionFlag = True
+							if "If-Unmodified-Since" in self.headers and "If-Match" not in self.headers and preconditionFlag:
+						
+								check_date = self.headers["If-Unmodified-Since"]
+								check_date = datetime.strptime(check_date, "%a, %d %b %Y %H:%M:%S GMT")
+								
+								if time.mktime(check_date.timetuple()) < last_modified_time:
+									preconditionFlag = False
+									self.isError = True
+									self.status_code = 412
+									self.error_response()
+									return
+
+							file = open(filePath+'/'.join(lst),'rb')
+							data = file.read()
+							Etag = '"'+str(int(last_modified_time)) + str(len(data))+'"'
+
+							if "If-Match" in self.headers:
+								etags_list = self.headers["If-Match"].split(",")
+								print('etag',etags_list,Etag)
+								if ("*" in etags_list or Etag in etags_list):
+									print('ETAG')
+									preconditionFlag = True
+								else:
+									print('prec  failed')
+									preconditionFlag = False
+									self.isError = True
+									self.status_code = 412
+									self.response = {}
+									self.error_response()
+									return self.response	
+							
+							
+							self.status_code = 204
+						else:
+							print('no')
+							self.isError = True
+							self.status_code = 403
+							self.error_response()
+							return self.response	
 					else:
 						self.status_code = 201
 				
@@ -501,30 +566,33 @@ class httpresponse:
 			raw_data = self.headers["data"]
 			multi_forms = raw_data.split(boundry)[1:-1]
 			#print(boundry)
-			#print("\nlst = ",multi_forms,"\n")
+			print("\nlst = ",multi_forms,"\n")
 			
 			total_data = {}
 			isTrue = False
 			for entry in multi_forms:
 				lst = entry.split(b"\r\n\r\n")
 				form_headers = lst[0].split(b"\r\n")[1:]
-				if b"Content-Disposition" in form_headers[0]:	
+				if b"Content-Disposition" in form_headers[0]:
 					if b"form-data" in form_headers[0] and b"filename" not in form_headers[0]:
 						isTrue = True
 						received_data = lst[1].decode('ISO-8859-1')
 						total_data[form_headers[0][form_headers[0].index(b' name=')+ 7:].decode('ISO-8859-1')] = received_data
 
 
-				if len(form_headers) > 1 and b"Content-Type" in form_headers[1]:
+				if len(form_headers) >= 1 and b"filename" in form_headers[0]:
 					print("i m in")
-					filetype = form_headers[1].split(b':')[1].strip(b" ")
+					if len(form_headers) > 1 and b'Content-Type' in form_headers[1]:
+						filetype = form_headers[1].split(b':')[1].strip(b" ")
+					else:
+						filetype = b'text'
 					if b"form-data" in form_headers[0] and b"filename" in form_headers[0]:
 						filename = form_headers[0][form_headers[0].index(b"filename")+10:-1]
 
 					elif b"file" in form_headers[0]:
 						filename = form_headers[0][form_headers[0].index(b"filename")+10:-1]
 					
-					filepath = DOCUMENT_ROOT+'/database/'+filename.decode()
+					filepath = DOCUMENT_ROOT+'/'+filename.decode()
 
 					if b"text" in filetype:
 						print("txt")
