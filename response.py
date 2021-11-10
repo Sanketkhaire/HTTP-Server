@@ -7,12 +7,13 @@ import mimetypes
 import gzip
 import zlib
 import brotli
-from Error_codes import status_codes
+from Error_codes import status_codes,acceptedMimeTypes
 import traceback
 from uuid import uuid4
 from hashlib import md5
 from urllib.parse import parse_qs
 from pandas import DataFrame
+import magic
 from logs import logger
 import threading
 import serverconfig
@@ -130,7 +131,7 @@ class httpresponse:
 				
 				charset = None
 				if "Accept-Charset" in self.headers:
-					if self.headers["Accept-Charset"] in ['utf-8','ISO-8859-1']:
+					if self.headers["Accept-Charset"] in ['UTF-8','ISO-8859-1']:
 						charset = self.headers["Accept-Charset"]
 					else:
 						self.isError = True
@@ -495,12 +496,13 @@ class httpresponse:
 				self.error_response()
 				return
 
+			mimeType = magic.from_buffer(self.headers["data"],mime=True)
+			if mimeType not in acceptedMimeTypes:
+				logger.debug('Mediatype not supported',{'process':os.getpid(),'thread':threading.get_ident()})
+				self.response = {}
+				self.status_code = 415
+				self.error_response()
 
-			# print(len(self.headers["data"]))
-			# if 'text' in self.headers["Content-Type"]:
-			# 	file = open(filePath + '/'.join(lst),'w')
-			# 	file.write(self.headers["data"].decode('ISO-8859-1'))
-			# else:
 			file = open(filePath + '/'.join(lst),'wb')
 			file.write(self.headers["data"])
 
@@ -510,6 +512,7 @@ class httpresponse:
 
 		except Exception as e:
 			print(e,'exception')
+			traceback.print_exc()
 			logger.debug(e,{'process':os.getpid(),'thread':threading.get_ident()})
 			self.response = {}
 			self.status_code = 404
