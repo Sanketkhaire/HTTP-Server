@@ -1,5 +1,6 @@
 import requests
 from socket import *
+import time
 
 
 class Testing:
@@ -33,18 +34,60 @@ class Testing:
 
 
     def hardGETtesting(self):
-        headers_dict = {'If-Unmodified-Since' : 'Sat, 06 Nov 2021 23:06:38 GMT',
-                        'Accept-Encoding' : 'gzip'}
-        getReq = requests.get(self.uri+'lp.png',headers=headers_dict)
-        print(getReq.headers)
+        headers_dict = {'If-Unmodified-Since' : 'Tue, 09 Nov 2021 23:06:38 GMT'}
 
-        headers_dict = {'Accept':'image/png', 
-                        'If-Modified-Since' : 'Sat, 06 Nov 2021 23:06:38 GMT',
-                        'If-Match' : getReq.headers['Etag'],
-                        'Cookie' : getReq.headers['Set-Cookie'].split(';')[0]}
+        getReq1 = requests.get(self.uri+'lp.webp',headers=headers_dict)
+        print(getReq1.headers)
+        print()
+        time.sleep(1)
 
-        getReq = requests.get(self.uri+'lp.webp',headers=headers_dict)
-        print(getReq.headers)
+        headers_dict = {'If-Unmodified-Since' : 'Sun, 07 Nov 2021 23:06:38 GMT'}
+
+        getReq2 = requests.get(self.uri+'lp.webp',headers=headers_dict)
+        print(getReq2.headers)
+        print()
+        time.sleep(1)
+
+        headers_dict = {'If-Modified-Since' : 'Fri, 05 Nov 2021 23:06:38 GMT'}
+
+        getReq3 = requests.get(self.uri+'lp.webp',headers=headers_dict)
+        print(getReq3.headers)
+        print()
+
+        headers_dict = {'If-Modified-Since' : 'Wed, 10 Nov 2021 13:06:38 GMT'}
+
+        getReq4 = requests.get(self.uri+'lp.webp',headers=headers_dict)
+        print(getReq4.headers)
+        print()
+        
+        headers_dict = {'Accept-Encoding' : 'gzip', 
+                        'Accept':'image/png',
+                        'Accept-Charset': 'UTF-8'
+                        }
+
+        getReq5 = requests.get(self.uri+'lp.webp',headers=headers_dict)
+        print(getReq5.headers)
+        print()
+
+        headers_dict = {'Accept-Encoding' : 'gzip', 
+                        'Accept':'image/png',
+                        'Accept-Charset': 'UTF-16'
+                        }
+
+        getReq6 = requests.get(self.uri+'lp.webp',headers=headers_dict)
+        print(getReq6.headers)
+        print()
+
+        headers_dict = {'If-Match' : getReq3.headers['ETag']}
+        getReq7 = requests.get(self.uri+'lp.webp',headers=headers_dict)
+        print(getReq7.headers)
+        print()
+
+        headers_dict = {'If-Match' : getReq5.headers['ETag']+'9'}
+        getReq8 = requests.get(self.uri+'lp.webp',headers=headers_dict)
+        print(getReq8.headers)
+        print()
+
 
     def checkQValue(self):
         headers_dict = {'Accept-Encoding' : 'gzip;q=0.8,deflate',
@@ -93,10 +136,77 @@ class Testing:
         modifiedSentence = clientSocket.recv(1024)
         print('From Server: ', modifiedSentence.decode())
 
+    def wrongHTTPVersion(self):
+        request = ("GET /viratk.jpeg HTTP/2.0\r\n"+
+        "User-Agent: PostmanRuntime/7.28.4\r\n"+
+        "Postman-Token: 45ff3ae3-8b6b-43ee-b0ad-906b7c675af8\r\n"+
+        "Host: 127.0.0.1:12008\r\n"+
+        "Accept-Encoding: gzip\r\n"+
+        "Accept-Type: image/jpeg\r\n\r\n")
+
+        serverName = '127.0.0.1'
+        serverPort = 12008
+        clientSocket = socket(AF_INET, SOCK_STREAM)
+
+        clientSocket.connect((serverName,serverPort))
+
+
+        clientSocket.send(request.encode())
+        modifiedSentence = clientSocket.recv(1024)
+        print('From Server: ', modifiedSentence.decode())
+
+    def largeRequestLine(self):
+        request = ("GET /viratkMYDEARSONMARCUSYOUHAVENOWBEENSTUDYINGINTRODUCTIONTHEIMPORTANCEOFCOMBININGGREEKANDLATINSTUDIESAFULLYEARUNDERCRATIPPUSANDTHATTOOINATHENSANDYOUSHOULDBEFULLYEQUIPPEDWITHTHEPRACTICALPRECEPTSANDTHEPRINCIPLESOFPHILOSOPHYSOMUCHATLEASTONEMIGHTEXPECTEROMTHEPREEMINENCENOTONLYOFYOURTEACHERBUTALSOOFTHECITYTHEFORMERISABLETOENRICHYOUWITHLEARNINGTHELATTERTOSUPPLYYOUWITHMODELSNEVERTHELESSJUSTASIFORMYOWNIMPROVEMENTHAVEALWAYSCOMBINEDGREEKANDLATINSTUDIESANDIHAVEDONETHISNOTONLYINTHESTUDYOFPHILOSOPHYBUTALSOINTHEPRACTICEOFORATORYSOIRECOMMENDTHATYOUSHOULDDOTHESAMESOTHATYOUMAYHAVEEQUALCOMMANDOFBOTHLANGUAGESMYDEARSONMARCUSYOUHAVENOWBEENSTUDYINGINTRODUCTIONTHEIMPORTANCEOFCOMBININGGREEKANDLATINSTUDIESAFULLYEARUNDERCRATIPPUSANDTHATTOOINATHENSANDYOUSHOULDBEFULLYEQUIPPEDWITHTHEPRACTICALPRECEPTSANDTHEPRINCIPLESOFPHILOSOPHYSOMUCHATLEASTONEMIGHTEXPECTEROMTHEPREEMINENCENOTONLYOFYOURTEACHERBUTALSOOFTHECITYTHEFORMERISABLETOENRICHYOUWITHLEARNINGTHELATTERTOSUPPLYYOUWITHMODELSNEVERTHELESSJUSTASIFORMYOWNIMPROVEMENTHAVEALWAYSCOMBINEDGREEKANDLATINSTUDIESANDIHAVEDONETHISNOTONLYINTHESTUDYOFPHILOSOPHYBUTALSOINTHEPRACTICEOFORATORYSOIRECOMMENDTHATYOUSHOULDDOTHESAMESOTHATYOUMAYHAVEEQUALCOMMANDOFBOTHLANGUAGESMYDEARSONMARCUSYOUHAVENOWBEENSTUDYINGINTRODUCTIONTHEIMPORTANCEOFCOMBININGGREEKANDLATINSTUDIESAFULLYEARUNDERCRATIPPUSANDTHATTOOINATHENSANDYOUSHOULDBEFULLYEQUIPPEDWITHTHEPRACTICALPRECEPTSANDTHEPRINCIPLESOFPHILOSOPHYSOMUCHATLEASTONEMIGHTEXPECTEROMTHEPREEMINENCENOTONLYOFYOURTEACHERBUTALSOOFTHECITYTHEFORMERISABLETOENRICHYOUWITHLEARNINGTHELATTERTOSUPPLYYOUWITHMODELSNEVERTHELESSJUSTASIFORMYOWNIMPROVEMENTHAVEALWAYSCOMBINEDGREEKANDLATINSTUDIESANDIHAVEDONETHISNOTONLYINTHESTUDYOFPHILOSOPHYBUTALSOINTHEPRACTICEOFORATORYSOIRECOMMENDTHATYOUSHOULDDOTHESAMESOTHATYOUMAYHAVEEQUALCOMMANDOFBOTHLANGUAGESMYDEARSONMARCUSYOUHAVENOWBEENSTUDYINGINTRODUCTIONTHEIMPORTANCEOFCOMBININGGREEKANDLATINSTUDIESAFULLYEARUNDERCRATIPPUSANDTHATTOOINATHENSANDYOUSHOULDBEFULLYEQUIPPEDWITHTHEPRACTICALPRECEPTSANDTHEPRINCIPLESOFPHILOSOPHYSOMUCHATLEASTONEMIGHTEXPECTEROMTHEPREEMINENCENOTONLYOFYOURTEACHERBUTALSOOFTHECITYTHEFORMERISABLETOENRICHYOUWITHLEARNINGTHELATTERTOSUPPLYYOUWITHMODELSNEVERTHELESSJUSTASIFORMYOWNIMPROVEMENTHAVEALWAYSCOMBINEDGREEKANDLATINSTUDIESANDIHAVEDONETHISNOTONLYINTHESTUDYOFPHILOSOPHYBUTALSOINTHEPRACTICEOFORATORYSOIRECOMMENDTHATYOUSHOULDDOTHESAMESOTHATYOUMAYHAVEEQUALCOMMANDOFBOTHLANGUAGES.jpeg HTTP/1.1\r\n"+
+        "User-Agent: PostmanRuntime/7.28.4\r\n"+
+        "Postman-Token: 45ff3ae3-8b6b-43ee-b0ad-906b7c675af8\r\n"+
+        "Host: 127.0.0.1:12008\r\n"+
+        "Accept-Encoding: gzip\r\n"+
+        "Accept-Type: image/jpeg\r\n\r\n")
+
+        serverName = '127.0.0.1'
+        serverPort = 12008
+        clientSocket = socket(AF_INET, SOCK_STREAM)
+
+        clientSocket.connect((serverName,serverPort))
+
+
+        clientSocket.send(request.encode())
+        modifiedSentence = clientSocket.recv(1024)
+        print('From Server: ', modifiedSentence.decode())
+
+
+    def mediaTypeTest(self):
+
+        file = open('rich.rtf','rb')
+
+        dataToSend = file.read()
+
+        request = ("PUT /richie.rtf HTTP/1.1\r\n"+
+        "User-Agent: PostmanRuntime/7.28.4\r\n"+
+        "Postman-Token: 45ff3ae3-8b6b-43ee-b0ad-906b7c675af8\r\n"+
+        "Host: 127.0.0.1:12008\r\n"+
+        "Connection: keep-alive\r\n"+
+        "Keep-Alive: 20\r\n"+
+        f"Content-Length: {len(dataToSend)}\r\n\r\n" ) 
+
+        serverName = '127.0.0.1'
+        serverPort = 12008
+        clientSocket = socket(AF_INET, SOCK_STREAM)
+
+        clientSocket.connect((serverName,serverPort))
+
+
+        clientSocket.send(request.encode()+dataToSend)
+        modifiedSentence = clientSocket.recv(1024)
+        print('From Server: ', modifiedSentence.decode())
+
+
 
 if __name__ == '__main__':
     tester = Testing()
     #tester.hardGETtesting()
     #tester.hardPOSTChecking()
     #tester.chec()
-    tester.PUTDataOutOfLimit()
+    #tester.wrongHTTPVersion()
+    #tester.largeRequestLine()
+    tester.mediaTypeTest()
