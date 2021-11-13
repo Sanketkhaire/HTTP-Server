@@ -287,7 +287,7 @@ class httpresponse:
 
 						
 				
-				self.response["headers"]["Accept-Ranges"] = "bytes"
+				#self.response["headers"]["Accept-Ranges"] = "bytes"
 				
 				if "Ranges" in self.headers:
 					
@@ -411,7 +411,6 @@ class httpresponse:
 				file.write(str(post_data))
 				file.close()
 
-			print("post__date=a", post_data)
 
 			self.response["status_code"] = self.status_code
 			self.response["reason_phrase"] = status_codes[self.status_code][0]
@@ -498,6 +497,7 @@ class httpresponse:
 
 			mimeType = magic.from_buffer(self.headers["data"],mime=True)
 			if mimeType not in acceptedMimeTypes:
+				print(mimeType)
 				logger.debug('Mediatype not supported',{'process':os.getpid(),'thread':threading.get_ident()})
 				self.response = {}
 				self.status_code = 415
@@ -569,7 +569,6 @@ class httpresponse:
 			raw_data = self.headers["data"]
 			multi_forms = raw_data.split(boundry)[1:-1]
 			#print(boundry)
-			print("\nlst = ",multi_forms,"\n")
 			
 			total_data = {}
 			isTrue = False
@@ -599,15 +598,15 @@ class httpresponse:
 
 					if b"text" in filetype:
 						print("txt")
-						received_data = lst[1].decode('ISO-8859-1')
-						file = open(filepath,'a')
-						file.write(str(received_data))
+						received_data = lst[1]
+						file = open(filepath,'wb')
+						file.write(received_data)
 						file.close()
 					
 					elif b"application" in filetype or b"image" in filetype or b"audio" in filetype or b"video" in filetype:
 						print("encoded")
 						received_data = lst[1]
-						file = open(filepath,'ab')
+						file = open(filepath,'wb')
 						file.write(received_data)
 						file.close()
 		
@@ -617,11 +616,11 @@ class httpresponse:
 			
 			return total_data,isTrue
 
-		elif '.' in self.headers["request_line"][1]:
-			path = '/'+self.headers["request_line"][1].split('/')[-1]
-			file = open(DOCUMENT_ROOT+path,'a')
+		elif len(self.headers["request_line"][1].split('/')) > 1:
+			name = self.headers["request_line"][1].split('/')[-1]
+			file = open(DOCUMENT_ROOT+'/'+name,'w')
 			file.write(self.headers["data"].decode())
-			self.response["headers"]["Content-Location"] = f"/{path}"
+			self.response["headers"]["Content-Location"] = f"/{name}"
 			return None,False
 
 	def handleCookie(self):
@@ -629,7 +628,7 @@ class httpresponse:
 			biscuit_id = uuid4().hex
 			Max_Age = 5
 			Path = '/'
-			Domain = ''
+			Domain = '""'
 			self.response['headers']['Set-Cookie'] = f'biscuit={biscuit_id}; Max-Age={Max_Age}; Path={Path}; Domain={Domain}'
 			cookie_file = open(DOCUMENT_ROOT+'/cookie.txt','a')
 			newcookie = f'[biscuit={biscuit_id} ,clientIP={self.headers["addr"][0]}, clientSocket={self.headers["addr"][1]}] : 1\n'

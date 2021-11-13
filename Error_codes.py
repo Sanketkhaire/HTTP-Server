@@ -45,7 +45,7 @@ status_codes = {
           'URI no longer exists and has been permanently removed.'),
     411: ('Length Required', 'Client must specify Content-Length.'),
     412: ('Precondition Failed', 'Precondition in headers is false.'),
-    413: ('Request Entity Too Large', 'Entity is too large.'),
+    413: ('Payload Too Large', 'Payload is too large.'),
     414: ('Request-URI Too Long', 'URI is too long.'),
     415: ('Unsupported Media Type', 'Entity body in unsupported format.'),
     416: ('Requested Range Not Satisfiable',
@@ -69,7 +69,7 @@ status_codes = {
 acceptedMimeTypes = {
       "text/css": ".css",
       "text/html": ".html",
-      "text/html": ".txt",
+      "text/plain": ".txt",
       "image/jpeg": ".jpg",
       "image/png": ".png",
       "application/pdf": ".pdf",

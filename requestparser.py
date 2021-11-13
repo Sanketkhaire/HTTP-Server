@@ -12,8 +12,8 @@ class HTTPRequest:
 	def parse(self,data):
 		
 		headers = data.split("\r\n")
-		print(data)
 		request_line = headers[0]
+		print(*headers)
 		print('\n request line',request_line,'\n')
 		request_line_list = request_line.split(" ")
 		self.method = request_line_list[0]
@@ -31,6 +31,5 @@ class HTTPRequest:
 			headers_list[temp[0]] = temp[1].strip()
 		
 		headers_list["request_line"] = request_line_list
-		print(headers_list)
 			
 		return headers_list

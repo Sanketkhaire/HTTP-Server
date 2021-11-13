@@ -24,32 +24,44 @@ class TCPServer:
 		print("THREAD STARTED")
 		print("nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn")
 		logger.debug('SERVER STARTED',{'process':os.getpid(),'thread':threading.get_ident()})
-		time = 10
+		time = 5
 		while True:
+			print("timeout is :",time)
 			conn.settimeout(time)
 			try:
 				data = b""
-				while(len(data) == 0):
+				empty = 0
+				while(len(data) == 0 and empty <= 100):
 					data = conn.recv(10000000)
+					empty += 1
+				if empty > 100:
+					conn.close()
+					break
+				
 				headers = self.get_headers(data)
 				content = headers["data"]
+				headers['addr'] = addr
+				isRequestTimeout = False
 				if "Content-Length" in headers:
+					isRequestTimeout = True
 					length = int(headers["Content-Length"])
 					while(length > len(content)):
 						content += conn.recv(10000000)
-				headers['addr'] = addr
+				isRequestTimeout = False
+				
 				response,resource,isClose = self.handle_request(content,headers,data+content)
 				print("between")
 				
-				if isClose:
-					conn.send(response.encode('ISO-8859-1')+resource)
-					conn.close()
-					break	
-
-				conn.send(response.encode('ISO-8859-1'))
+				# if isClose:
+				# 	conn.send(response.encode('ISO-8859-1')+resource)
+				# 	conn.close()
+				# 	break	
 
 				if resource:
-					conn.send(resource)
+					conn.send(response.encode('ISO-8859-1')+resource)
+				else:
+					conn.send(response.encode('ISO-8859-1'))
+
 				if "Connection" in headers and headers["Connection"] == "keep-alive":
 					if 'Keep-Alive' in headers:
 						time = int(headers['Keep-Alive'])
@@ -62,6 +74,11 @@ class TCPServer:
 					break
 						
 			except socket.timeout:
+				if(isRequestTimeout):
+					response,resource,isClose  = self.handle_request(None,headers,data+content)
+					conn.send(response.encode('ISO-8859-1')+resource)
+					conn.close()
+
 				print("khaire")
 				conn.close()
 				break
@@ -101,8 +118,8 @@ class HTTPServer(TCPServer):
 		TCPServer.__init__(self,host,port)
 
 	def get_headers(self,data):
-		raw_data = data.decode("ISO-8859-1")
-		http_req = HTTPRequest(raw_data)
+		raw_data = data[:data.index(b"\r\n\r\n")]
+		http_req = HTTPRequest(raw_data.decode("ISO-8859-1"))
 		http_req.headers_request["data"] = data[data.index(b"\r\n\r\n")+4:]
 		return http_req.headers_request
 
@@ -138,7 +155,6 @@ class HTTPServer(TCPServer):
 		httpResponse,resource = httpResponseObject.build_response()
 
 		sendResponse = httpResponse["protocol"] + " " + str(httpResponse["status_code"]) + " " + httpResponse["reason_phrase"] + "\r\n"
-		print(httpResponse)
 		for key,value in httpResponse["headers"].items():
 			sendResponse += str(key)+": "+str(value)+"\r\n"
 		
@@ -148,17 +164,18 @@ class HTTPServer(TCPServer):
 		sendResponse += "\r\n"
 		print(type(resource))
 		#sendResponse = bytes(sendResponse,'utf-8')
-		print(sendResponse)
 		print(getpid())
+		print(sendResponse)
 		return sendResponse,resource,close
 		
 		
 	def checkForErrors(self,headers_req, data):
-		print("\nok\nok\n",data.split("\r\n\r\n")[0],"\nok\nok\n")
 		if(headers_req['request_line'][2] not in ['HTTP/1.1','HTTP/1.0']):
-			return True, 505
-		if(self.isService == False):
+			return True,505
+		elif(self.isService == False):
 			return True,503
+		elif (headers_req["data"] == None):
+			return True,408
 		elif(len((headers_req["request_line"])[1]) > 2000):
 			return True,414
 		elif(len((data.split("\r\n\r\n"))[0]) > 16000):
@@ -173,6 +190,8 @@ class HTTPServer(TCPServer):
 			return True,413
 		elif(self.isForbidden(headers_req)):
 			return True,403
+		elif(headers_req['request_line'][0] in ['POST','PUT'] and 'Content-Length' not in headers_req):
+			return True,411
 		
 		'''
 		elif(not self.checkExpect(headers_req)):
@@ -189,7 +208,6 @@ class HTTPServer(TCPServer):
 		
 		
 	def isImplemented(self,headers_req):
-		print(headers_req)
 		valid_headers = ["Accept",
 		"Expect",
 		"Accept-Language",
@@ -251,7 +269,7 @@ class HTTPServer(TCPServer):
 		print('check payload')
 		if(headers_req["request_line"][0] == "HEAD"):
 			return False
-		elif(len(headers_req['data']) > 100000000):
+		elif(len(headers_req['data']) > 5000000):
 			return True 
 		print('lol')
 
