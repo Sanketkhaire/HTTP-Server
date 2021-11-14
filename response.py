@@ -54,6 +54,7 @@ class httpresponse:
 				self.response["headers"]["Connection"] = "Keep-Alive"
 
 		self.threadLock.acquire()
+		logger.debug('cookie',{'process':os.getpid(),'thread':threading.get_ident()})
 		self.handleCookie()
 		self.threadLock.release()
 
@@ -598,11 +599,12 @@ class httpresponse:
 			return None,False
 
 	def handleCookie(self):
+		logger.error('in cookie',{'process':os.getpid(),'thread':threading.get_ident()})
 		if 'Cookie' not in self.headers:
 			biscuit_id = uuid4().hex
-			Max_Age = 5
+			Max_Age = 10
 			Path = '/'
-			Domain = '""'
+			Domain = ''
 			self.response['headers']['Set-Cookie'] = f'biscuit={biscuit_id}; Max-Age={Max_Age}; Path={Path}; Domain={Domain}'
 			cookie_file = open(DOCUMENT_ROOT+'/cookie.txt','a')
 			newcookie = f'[biscuit={biscuit_id} ,clientIP={self.headers["addr"][0]}, clientSocket={self.headers["addr"][1]}] : 1\n'

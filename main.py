@@ -156,10 +156,6 @@ class HTTPServer(TCPServer):
 			encoding_list = [k for k,v in sorted(q_val.items(), key=lambda item: item[1],reverse=True)]
 
 			headers_req["Accept-Encoding"] = encoding_list
-	
-				####
-				#checking if object is available in the given language
-				####
 			
 		
 		httpResponseObject = httpresponse(headers_req,isError,status_code)

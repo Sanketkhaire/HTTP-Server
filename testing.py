@@ -15,6 +15,9 @@ class Testing:
         print("[#fe8484]SIMPLE GET REQUEST")
         print("GET "+self.uri+" HTTP/1.1")
         self.displayAll(getReq)
+        fp = open("createdfiles/index.html","wb")
+        fp.write(getReq.content)
+
 
         #head
         headReq = requests.head(self.uri,headers={'Connection':'Close'})
@@ -53,7 +56,8 @@ class Testing:
         print("[#fe8484]GET REQUEST WITH 'If-Unmodified-Since' header :")
         print("GET "+self.uri+'lp.jpg'+" HTTP/1.1")
         self.displayAll(getReq1)
-        time.sleep(1)
+        fp = open("createdfiles/index.html","wb")
+        fp.write(getReq1.content)
 
         headers_dict = {'If-Unmodified-Since' : 'Mon, 01 Nov 2021 10:00:00 GMT'}
 
@@ -61,7 +65,6 @@ class Testing:
         print("[#fe8484]GET REQUEST WITH 'If-Unmodified-Since' header :")
         print("GET "+self.uri+'lp.jpg'+" HTTP/1.1")
         self.displayAll(getReq2)
-        time.sleep(1)
 
         headers_dict = {'If-Modified-Since' : 'Wed, 03 Nov 2021 23:00:00 GMT'}
 
@@ -498,6 +501,34 @@ class Testing:
         else:
             print("Connection is closed by server by default\nHence, no reply\n")
 
+    def testForCookie(self):
+        
+        print("\n[#fe8484]Sending cookie in more than 1 requests to display in cookie file of server ;")
+        getReq = requests.get(self.uri,headers={'Connection':'Close'})
+        hdrs = dict(getReq.headers)
+        cookie = hdrs["Set-Cookie"].split(";")[0]
+
+        for i in range(10):
+            getReq = requests.get(self.uri,headers={'Cookie':cookie})
+        
+    def gettingMedias(self):
+        getReq = requests.get(self.uri + 'file.pdf',headers={'Connection':'Close'})
+        print("[#fe8484]SIMPLE GET REQUEST")
+        print("GET "+self.uri+'file.pdf'+" HTTP/1.1")
+        self.displayAll(getReq)
+        fp = open("createdfiles/file.pdf","wb")
+        fp.write(getReq.content)
+        fp.close()
+
+        getReq = requests.get(self.uri+'video.mp4',headers={'Connection':'Close'})
+        print("GET "+self.uri+'video.mp4'+" HTTP/1.1")
+        self.displayAll(getReq)
+        fp = open("createdfiles/video.mp4","wb")
+        fp.write(getReq.content)
+        fp.close()
+
+        
+
 
     def displayAll(self,res):
         req = dict(res.request.headers)
@@ -530,4 +561,6 @@ if __name__ == '__main__':
     testingTool.putWithPrecondition()
     testingTool.testPersistent()
     testingTool.testingDefaultPers()
+    testingTool.testForCookie()
+    testingTool.gettingMedias()
 
