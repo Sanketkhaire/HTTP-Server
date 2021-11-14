@@ -1,7 +1,7 @@
 import requests
 from socket import *
 import time
-from rich import print, style
+from rich import print
 
 
 class Testing:
@@ -30,7 +30,7 @@ class Testing:
         self.displayAll(postReq)
 
         #put
-        file = open('welcome.txt','rb')
+        file = open('testingFiles/welcome.txt','rb')
         putData = file.read()
         putReq = requests.put(self.uri+'wel.txt',headers={'Connection':'Close'},data=putData)
         print("[#fe8484]SIMPLE PUT REQUEST")
@@ -46,7 +46,7 @@ class Testing:
 
     def hardGETtesting(self):
         '''Tuesday 02 November 2021 12∶06∶58 PM'''
-        
+
         headers_dict = {'If-Unmodified-Since' : 'Wed, 03 Nov 2021 23:00:00 GMT'}
 
         getReq1 = requests.get(self.uri+'lp.jpg',headers=headers_dict)
@@ -123,7 +123,7 @@ class Testing:
     def hardPOSTChecking(self):
         
         print("[#fe8484]POST REQUEST with sending file and after that redirecting to the uri mentioned in 'LOCATION' HEADER:")
-        file = open('filee.pdf','rb')
+        file = open('testingFiles/filee.pdf','rb')
         postData = file.read()
         print("[#fe8484]readirection not allowed")
         print("POST "+self.uri+" HTTP/1.1")
@@ -230,11 +230,10 @@ class Testing:
         print('\n\n')
 
 
-
     def payloadOutOfLimit(self):
         
         print("[#fe8484]Length of payload(entity) out of bound :")
-        file = open('bfile.mp3','rb')
+        file = open('testingFiles/bfile.mp3','rb')
         dataToSend = file.read()
 
         request = ("PUT /song.mp3 HTTP/1.1\r\n"+
@@ -261,11 +260,10 @@ class Testing:
         print('\n\n')
 
 
-
     def mediaTypeTest(self):
 
         print("[#fe8484]Request with Media-Type which is not serviced at server:")
-        file = open('rich.rtf','rb')
+        file = open('testingFiles/rich.rtf','rb')
 
         dataToSend = file.read()
 
@@ -295,7 +293,7 @@ class Testing:
     def requestTimeout(self):
 
         print("[#fe8484]Requesting put data with wrong content length causing timeout:")
-        file = open('aud.mp3','rb')
+        file = open('testingFiles/aud.mp3','rb')
         dataToSend = file.read()
 
         request = ("PUT /aud.mp3 HTTP/1.1\r\n"+
@@ -322,11 +320,10 @@ class Testing:
         print('\n\n')
 
 
-
     def testWithoutContentLength(self):
 
         print("[#fe8484]Requesting to put data without content-Length:")
-        file = open('aud.mp3','rb')
+        file = open('testingFiles/aud.mp3','rb')
         dataToSend = file.read()
 
         request = ("PUT /aud.mp3 HTTP/1.1\r\n"+
@@ -354,7 +351,7 @@ class Testing:
 
     def wrongHeaders(self):
 
-        file = open('random.txt','rb')
+        file = open('testingFiles/random.txt','rb')
         dataToSend = file.read()
 
         print("[#fe8484]Requesting with wrong HTTP header :")
@@ -383,7 +380,7 @@ class Testing:
 
     def putWithPrecondition(self):
         print("[#fe8484]PUT request with 'If-Unmodified_Since' header:")
-        file = open('lp.jpg','rb')
+        file = open('testingFiles/lp.jpg','rb')
         dataToSend = file.read()
 
         request = ("PUT /img1.jpeg HTTP/1.1\r\n"+
@@ -391,7 +388,7 @@ class Testing:
         "Content-Type: image/jpeg\r\n"+
         "Host: 127.0.0.1:12008\r\n"+
         "Connection: keep-alive\r\n"+
-        "If-Unmodified-Since: Thu, 04 November 2021 12∶00∶00 GMT\r\n"
+        "If-Unmodified-Since: Thu, 04 Nov 2021 10:00:00 GMT\r\n"
         "Keep-Alive: 20\r\n"+
         f"Content-Length: {len(dataToSend)}\r\n\r\n") 
 
@@ -408,6 +405,10 @@ class Testing:
         print("Response :")
         print(modifiedSentence.decode())
         print('\n\n')
+
+        clientSocket = socket(AF_INET, SOCK_STREAM)
+
+        clientSocket.connect((serverName,serverPort))
 
         print("[#fe8484]PUT request with 'If-Match' header:")
         request = ("PUT /img2.jpeg HTTP/1.1\r\n"+
@@ -427,6 +428,76 @@ class Testing:
         print("Response :")
         print(modifiedSentence.decode())
         print('\n\n')
+
+    def testPersistent(self):
+
+        print("[#fe8484]Sending continuous 50 requests to show implementation of persistent and to show multithreading\nSee error logs for more details")
+        print("[#fe8484]Also crossing limit of MAX-CONNECTION of server\n\n")
+
+        serverName = '127.0.0.1'
+        serverPort = 12008
+        clientSocket = socket(AF_INET, SOCK_STREAM)
+        clientSocket.connect((serverName,serverPort))
+        
+
+        for i in range(50):
+            clientSocket = socket(AF_INET, SOCK_STREAM)
+            clientSocket.connect((serverName,serverPort))
+            data = f"college=C{i}&place=p{i}"
+            request = ("POST / HTTP/1.1\r\n"+
+            "User-Agent: PostmanRuntime/7.28.4\r\n"+
+            "Content-Type: application/x-www-form-urlencoded\r\n"+
+            "Host: 127.0.0.1:12008\r\n"+
+            "Connection: keep-alive\r\n"+
+            "Keep-Alive: 20\r\n"+
+            f"Content-Length: {len(data)}\r\n\r\n")
+
+            
+            clientSocket.send(request.encode()+data.encode())
+            modifiedSentence = clientSocket.recv(1024)
+
+        clientSocket.close()
+    
+    def testingDefaultPers(self):
+        
+        print("[#fe8484]Sending simple request to show connection is non-persistent by default")
+        serverName = '127.0.0.1'
+        serverPort = 12008
+        clientSocket = socket(AF_INET, SOCK_STREAM)
+        clientSocket.connect((serverName,serverPort))
+
+        request = ("GET /random.txt HTTP/1.1\r\n"+
+        "User-Agent: PostmanRuntime/7.28.4\r\n"+
+        "Accept: text/plain\r\n"+
+        "Host: 127.0.0.1:12008\r\n\r\n")
+
+        clientSocket.send(request.encode())
+        modifiedSentence = clientSocket.recv(1024)
+
+        print("Request :")
+        print(request)
+        print("Response :")
+        print(modifiedSentence.decode())
+        print('\n\n')
+
+        request = ("GET /random.text HTTP/1.1\r\n"+
+        "User-Agent: PostmanRuntime/7.28.4\r\n"+
+        "Accept: text/plain\r\n"+
+        "Host: 127.0.0.1:12008\r\n\r\n")
+
+        print("[#fe8484]Sending same request again")
+        
+        clientSocket.send(request.encode())
+        modifiedSentence = clientSocket.recv(1024)
+        if(modifiedSentence):
+            print("Request :")
+            print(request)
+            print("Response :")
+            print(modifiedSentence.decode())
+            print('\n\n')
+        else:
+            print("Connection is closed by server by default\nHence, no reply\n")
+
 
     def displayAll(self,res):
         req = dict(res.request.headers)
@@ -457,3 +528,6 @@ if __name__ == '__main__':
     testingTool.payloadOutOfLimit()
     testingTool.wrongHeaders()
     testingTool.putWithPrecondition()
+    testingTool.testPersistent()
+    testingTool.testingDefaultPers()
+

@@ -5,14 +5,15 @@ import threading
 from requestparser import HTTPRequest
 from response import *
 import serverconfig
-import logging
+from time import sleep
 from logs import logger
 from datetime import datetime
 
 
 DOCUMENT_ROOT = serverconfig.DOCUMENT_ROOT
-PORT_NUMBER = 12008
+PORT_NUMBER = serverconfig.PORT_NUMBER
 COOKIE_LOG = 'cookie.txt'
+MAX_CONNECTION = int(serverconfig.MAX_CONNECTION)
 
 class TCPServer:
 
@@ -21,20 +22,17 @@ class TCPServer:
 		self.port = port
 
 	def connection(self,conn,addr):
-		print("THREAD STARTED")
-		print("nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn")
-		logger.debug('SERVER STARTED',{'process':os.getpid(),'thread':threading.get_ident()})
+		logger.debug(f'New thread{threading.active_count()} {addr}',{'process':os.getpid(),'thread':threading.get_ident()})
 		time = 5
 		while True:
-			print("timeout is :",time)
 			conn.settimeout(time)
 			try:
 				data = b""
 				empty = 0
-				while(len(data) == 0 and empty <= 100):
+				while(len(data) == 0 and empty <= 10000):
 					data = conn.recv(10000000)
 					empty += 1
-				if empty > 100:
+				if empty > 10000:
 					conn.close()
 					break
 				
@@ -47,10 +45,10 @@ class TCPServer:
 					length = int(headers["Content-Length"])
 					while(length > len(content)):
 						content += conn.recv(10000000)
+
 				isRequestTimeout = False
 				
 				response,resource,isClose = self.handle_request(content,headers,data+content)
-				print("between")
 				
 				# if isClose:
 				# 	conn.send(response.encode('ISO-8859-1')+resource)
@@ -62,16 +60,20 @@ class TCPServer:
 				else:
 					conn.send(response.encode('ISO-8859-1'))
 
+				if isClose:
+					conn.close()
+					break
+
 				if "Connection" in headers and headers["Connection"] == "keep-alive":
 					if 'Keep-Alive' in headers:
 						time = int(headers['Keep-Alive'])
 					else:
 						time = 10
-					print("sssssssssssssssssssssssssssssssss")
 					continue
 				else:
 					conn.close()
 					break
+
 						
 			except socket.timeout:
 				if(isRequestTimeout):
@@ -79,27 +81,32 @@ class TCPServer:
 					conn.send(response.encode('ISO-8859-1')+resource)
 					conn.close()
 
-				print("khaire")
 				conn.close()
 				break
+		logger.debug(f'Finished{addr}',{'process':os.getpid(),'thread':threading.get_ident()})
 		
-		print("go out")
       
 
 	def start(self):
-
+		logger.debug('SERVER STARTED',{'process':os.getpid(),'thread':threading.get_ident()})
 		s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		s.bind((self.host, int(self.port)))
 		s.listen(10)
 		
-		print("Listening at", s.getsockname())
+		#print("\nListening at", s.getsockname())
         
 		while True:
 			conn, addr = s.accept()
-			print("Connected by", addr)
-			th = threading.Thread(target=self.connection,args=(conn,addr))
+			#print("Connected by", addr)
+			
+			th = threading.Thread(target=self.connection,args=(conn,addr,))
 			th.start()
+			if threading.active_count() > MAX_CONNECTION:
+				logger.debug('max-connections crossed , sleeping',{'process':os.getpid(),'thread':threading.get_ident()})
+				sleep(3)
+		
+
 
 			
 	def handle_request(self, data,headers,request):
@@ -118,9 +125,15 @@ class HTTPServer(TCPServer):
 		TCPServer.__init__(self,host,port)
 
 	def get_headers(self,data):
-		raw_data = data[:data.index(b"\r\n\r\n")]
+		if b'\r\n\r\n' in data: 
+			raw_data = data[:data.index(b"\r\n\r\n")]
+			entity = data[data.index(b"\r\n\r\n")+4:]
+		else:
+			raw_data = data
+			entity = b""
 		http_req = HTTPRequest(raw_data.decode("ISO-8859-1"))
-		http_req.headers_request["data"] = data[data.index(b"\r\n\r\n")+4:]
+		http_req.headers_request["data"] = entity
+		
 		return http_req.headers_request
 
 	def handle_request(self, data,headers_req,request):
@@ -128,7 +141,6 @@ class HTTPServer(TCPServer):
 		headers_req["data"] = data
 
 		isError, status_code = self.checkForErrors(headers_req,request.decode("ISO-8859-1"))
-		print(isError,status_code,"yes")
 		
 		if "Accept-Encoding" in headers_req:
 			accept = headers_req["Accept-Encoding"]
@@ -143,7 +155,6 @@ class HTTPServer(TCPServer):
 					q_val[entry[0]] = float(entry[1].split('=')[1])
 			encoding_list = [k for k,v in sorted(q_val.items(), key=lambda item: item[1],reverse=True)]
 
-			print("Encoding list --------------",encoding_list)
 			headers_req["Accept-Encoding"] = encoding_list
 	
 				####
@@ -162,10 +173,8 @@ class HTTPServer(TCPServer):
 		if 'Connection' in httpResponse["headers"] and httpResponse["headers"]["Connection"] == "Close":
 			close = True
 		sendResponse += "\r\n"
-		print(type(resource))
 		#sendResponse = bytes(sendResponse,'utf-8')
-		print(getpid())
-		print(sendResponse)
+	
 		return sendResponse,resource,close
 		
 		
@@ -203,7 +212,7 @@ class HTTPServer(TCPServer):
 		elif("Expect" in headers_req and headers_req["Expect"] == "100-continue"):
 			return False,100
 		'''
-		print('NO ERROR')
+
 		return False,None
 		
 		
@@ -248,7 +257,6 @@ class HTTPServer(TCPServer):
 		headers_list.remove("addr")
 		for header in headers_list:
 			if(header not in valid_headers):
-				print("header",header)
 				return False
 		
 		return True
@@ -266,12 +274,10 @@ class HTTPServer(TCPServer):
 	
 	
 	def isPayloadLarge(self,headers_req):
-		print('check payload')
 		if(headers_req["request_line"][0] == "HEAD"):
 			return False
 		elif(len(headers_req['data']) > 5000000):
 			return True 
-		print('lol')
 
 	def isMediaTypeSupported(self,Cont_type, cont_encod):
 		return True

@@ -13,15 +13,12 @@ class HTTPRequest:
 		
 		headers = data.split("\r\n")
 		request_line = headers[0]
-		print(*headers)
-		print('\n request line',request_line,'\n')
 		request_line_list = request_line.split(" ")
 		self.method = request_line_list[0]
 		self.uri = request_line_list[1]
 		self.http_version = request_line_list[2]
 		
 		headers = headers[1:]
-		print("parse")
 		headers_list = {}
 		
 		for header in headers:

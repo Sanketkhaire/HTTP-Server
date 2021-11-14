@@ -63,10 +63,10 @@ class httpresponse:
 			self.response["status_code"] = 100
 			self.response["reason_phrase"] = status_codes[100][0]
 			self.response["headers"] = {}
-			print("10000000000000")
 			#return self.response,self.resource
 		elif(self.isError):
 			self.response = {}
+			logger.error(status_codes[self.status_code],{'process':os.getpid(),'thread':threading.get_ident()})
 			self.error_response()
 		elif(method == "GET"):
 			self.GET_response()
@@ -116,6 +116,7 @@ class httpresponse:
 			if(not os.path.exists(filePath)):
 				self.isError = True
 				self.status_code = 404
+				logger.error('Path does not exist',{'process':os.getpid(),'thread':threading.get_ident()})
 				self.response = {}
 				self.error_response()
 				return self.response
@@ -125,7 +126,7 @@ class httpresponse:
 				if not os.access(filePath,os.R_OK):
 					self.isError = False
 					self.status_code = 403
-					logger.error('Path does not exist',{'process':os.getpid(),'thread':threading.get_ident()})
+					logger.error('No read permission on the resource',{'process':os.getpid(),'thread':threading.get_ident()})
 					self.error_response()
 					return self.response
 				
@@ -136,6 +137,7 @@ class httpresponse:
 					else:
 						self.isError = True
 						self.status_code = 406
+						logger.error(status_codes[self.status_code],{'process':os.getpid(),'thread':threading.get_ident()})
 						self.error_response()
 						return self.response
 				else:
@@ -154,9 +156,9 @@ class httpresponse:
 						else:
 							q_val[entry[0]] = float(entry[1].split('=')[1])
 					
-					print(q_val)
+					
 					type_list = [k for k,v in sorted(q_val.items(), key=lambda item: item[1],reverse=True)]
-					print(type_list)
+					
 					file = fileName.split('.')[0]
 					isAvailable = False
 					for i in type_list:
@@ -165,17 +167,16 @@ class httpresponse:
 							self.resource = filep.read()
 							isAvailable = True
 							break
-						if os.path.exists(DOCUMENT_ROOT+'/'+file+'.'+i.split('/')[1]):
+						if os.path.exists(DOCUMENT_ROOT+'/'+file+acceptedMimeTypes[i]):
 							if (i.split('/')[0] in ['image', 'video','audio']):
-								filePath = DOCUMENT_ROOT+'/'+file+'.'+i.split('/')[1]
+								filePath = DOCUMENT_ROOT+'/'+file+ acceptedMimeTypes[i]
 								filep = open(filePath,'rb')
 								self.resource = filep.read()
 							else:
-								filePath = DOCUMENT_ROOT+'/'+file+'.'+i.split('/')[1]
+								filePath = DOCUMENT_ROOT+'/'+file+ acceptedMimeTypes[i]
 								filep = open(filePath,'r')
 								self.resource = bytes(filep.read(),charset)
 							isAvailable = True
-							print("here")
 							break
 					
 					if (not isAvailable):
@@ -185,17 +186,11 @@ class httpresponse:
 						self.error_response()
 						return self.response
 
-						####
-						#checking if filetype is available in the given type and subtype
-						####
 					
 				else:
 					filep = open(filePath,'rb')
 					self.resource = filep.read()
 
-				#if "Accept-Charset" in self.headers :
-
-			
 				last_modified_time = os.path.getmtime(filePath)
 				last_modified = time.strftime("%a, %d %b %Y %H:%M:%S GMT",time.gmtime(last_modified_time))
 				
@@ -206,15 +201,13 @@ class httpresponse:
 				
 				if "If-Match" in self.headers:
 					etags_list = self.headers["If-Match"].split(",")
-					print('etag',etags_list,Etag)
 					if ("*" in etags_list or Etag in etags_list):
-						print('ETAG')
 						preconditionFlag = True
 					else:
-						print('prec  failed')
 						preconditionFlag = False
 						self.isError = True
 						self.status_code = 412
+						logger.error(status_codes[self.status_code],{'process':os.getpid(),'thread':threading.get_ident()})
 						self.response = {}
 						self.error_response()
 						return self.response
@@ -222,7 +215,6 @@ class httpresponse:
 				if "If-Modified-Since" in self.headers and preconditionFlag:
 					
 					check_date = self.headers["If-Modified-Since"]
-					print(self.headers["If-Modified-Since"])
 					check_date = datetime.strptime(check_date, "%a, %d %b %Y %H:%M:%S %Z")
 					
 					if time.mktime(check_date.timetuple()) > last_modified_time:
@@ -243,6 +235,7 @@ class httpresponse:
 						preconditionFlag = False
 						self.isError = True
 						self.status_code = 412
+						logger.error(status_codes[self.status_code],{'process':os.getpid(),'thread':threading.get_ident()})
 						self.error_response()
 						return self.response
 					
@@ -282,12 +275,11 @@ class httpresponse:
 						preconditionFlag = False
 						self.isError = True
 						self.status_code = 406
+						logger.error(status_codes[self.status_code],{'process':os.getpid(),'thread':threading.get_ident()})
 						self.error_response()
 						return self.response
 
 						
-				
-				#self.response["headers"]["Accept-Ranges"] = "bytes"
 				
 				if "Ranges" in self.headers:
 					
@@ -343,8 +335,6 @@ class httpresponse:
 				
 
 		except Exception as e:
-			traceback.print_exc()
-			print(e)
 			self.response = {}
 			self.status_code = 404
 			logger.error(status_codes[self.status_code],{'process':os.getpid(),'thread':threading.get_ident()})
@@ -355,12 +345,9 @@ class httpresponse:
 	def error_response(self):
 		'''status-line, Date, Server, Content-Length, Connection, Content-Type, transfer-encoding'''
 		
-		#self.response["headers"]["
-		print("nooo")
 		self.response["protocol"] = "HTTP/1.1"
 		self.response["status_code"] = self.status_code
 		self.response["reason_phrase"] = status_codes[self.status_code][0]
-		print(self.response["reason_phrase"])
 		self.response["headers"] = {}
 		self.response["headers"]["Date"] = formatdate(timeval=None, localtime=False, usegmt=True)
 		self.response["headers"]["Server"] = "MY_HTTP_SERVER"
@@ -382,7 +369,6 @@ class httpresponse:
 
 		try:
 
-			print("in post")
 			uri = self.headers["request_line"][1]
 			
 			filePath = "/"
@@ -405,6 +391,7 @@ class httpresponse:
 				if not os.access(DOCUMENT_ROOT+'/'+"logs.txt",os.W_OK):
 					self.isError = True
 					self.status_code = 403
+					logger.error(status_codes[self.status_code],{'process':os.getpid(),'thread':threading.get_ident()})
 					self.error_response()
 					return self.response
 				file = open(DOCUMENT_ROOT+'/logs.txt','a')
@@ -417,10 +404,9 @@ class httpresponse:
 				
 		
 		except Exception as e:
-			traceback.print_exc()
-			print(e)
 			self.response = {}
 			self.status_code = 404
+			logger.error(e,{'process':os.getpid(),'thread':threading.get_ident()})
 			self.error_response()
 
 
@@ -431,9 +417,7 @@ class httpresponse:
 			filePath = DOCUMENT_ROOT
 			file = None
 			if os.path.exists(filePath+'/'.join(lst[:-1])):
-				print('okk',filePath+'/'.join(lst[:-1]))
 				if os.access(filePath+'/'.join(lst[:-1]),os.W_OK):
-					print('okokok')
 					if os.path.exists(filePath+'/'.join(lst)):
 						if os.access(filePath+'/'.join(lst),os.W_OK):
 							last_modified_time = os.path.getmtime(filePath+'/'.join(lst))
@@ -447,6 +431,7 @@ class httpresponse:
 									preconditionFlag = False
 									self.isError = True
 									self.status_code = 412
+									logger.error(status_codes[self.status_code],{'process':os.getpid(),'thread':threading.get_ident()})
 									self.error_response()
 									return
 
@@ -456,15 +441,13 @@ class httpresponse:
 
 							if "If-Match" in self.headers:
 								etags_list = self.headers["If-Match"].split(",")
-								print('etag',etags_list,Etag)
 								if ("*" in etags_list or Etag in etags_list):
-									print('ETAG')
 									preconditionFlag = True
 								else:
-									print('prec  failed')
 									preconditionFlag = False
 									self.isError = True
 									self.status_code = 412
+									logger.error(status_codes[self.status_code],{'process':os.getpid(),'thread':threading.get_ident()})
 									self.response = {}
 									self.error_response()
 									return self.response	
@@ -472,24 +455,23 @@ class httpresponse:
 							
 							self.status_code = 204
 						else:
-							print('no')
 							self.isError = True
 							self.status_code = 403
+							logger.error(status_codes[self.status_code],{'process':os.getpid(),'thread':threading.get_ident()})
 							self.error_response()
 							return self.response	
 					else:
 						self.status_code = 201
 				
 				else:
-					print('no')
 					self.isError = True
 					self.status_code = 403
+					logger.error(status_codes[self.status_code],{'process':os.getpid(),'thread':threading.get_ident()})
 					self.error_response()
 					return self.response
 
 			else:
-				print('nono')
-				logger.debug('Path does not exist',{'process':os.getpid(),'thread':threading.get_ident()})
+				logger.debug('Path does not exist for put resource',{'process':os.getpid(),'thread':threading.get_ident()})
 				self.response = {}
 				self.status_code = 404
 				self.error_response()
@@ -497,8 +479,7 @@ class httpresponse:
 
 			mimeType = magic.from_buffer(self.headers["data"],mime=True)
 			if mimeType not in acceptedMimeTypes:
-				print(mimeType)
-				logger.debug('Mediatype not supported',{'process':os.getpid(),'thread':threading.get_ident()})
+				logger.error('Mediatype not supported',{'process':os.getpid(),'thread':threading.get_ident()})
 				self.response = {}
 				self.status_code = 415
 				self.error_response()
@@ -511,8 +492,6 @@ class httpresponse:
 
 
 		except Exception as e:
-			print(e,'exception')
-			traceback.print_exc()
 			logger.debug(e,{'process':os.getpid(),'thread':threading.get_ident()})
 			self.response = {}
 			self.status_code = 404
@@ -549,8 +528,7 @@ class httpresponse:
 			self.response["reason_phrase"] = status_codes[self.status_code][0]
 			
 		except Exception as e:
-			traceback.print_exc()
-			print(e)
+			logger.error(e,{'process':os.getpid(),'thread':threading.get_ident()})
 			self.response = {}
 			self.status_code = 404
 			self.error_response()
@@ -568,7 +546,6 @@ class httpresponse:
 			boundry = bytes('--'+self.headers["Content-Type"].split("=")[-1],'ISO-8859-1')
 			raw_data = self.headers["data"]
 			multi_forms = raw_data.split(boundry)[1:-1]
-			#print(boundry)
 			
 			total_data = {}
 			isTrue = False
@@ -583,7 +560,6 @@ class httpresponse:
 
 
 				if len(form_headers) >= 1 and b"filename" in form_headers[0]:
-					print("i m in")
 					if len(form_headers) > 1 and b'Content-Type' in form_headers[1]:
 						filetype = form_headers[1].split(b':')[1].strip(b" ")
 					else:
@@ -597,14 +573,12 @@ class httpresponse:
 					filepath = DOCUMENT_ROOT+'/'+filename.decode()
 
 					if b"text" in filetype:
-						print("txt")
 						received_data = lst[1]
 						file = open(filepath,'wb')
 						file.write(received_data)
 						file.close()
 					
 					elif b"application" in filetype or b"image" in filetype or b"audio" in filetype or b"video" in filetype:
-						print("encoded")
 						received_data = lst[1]
 						file = open(filepath,'wb')
 						file.write(received_data)
@@ -640,7 +614,6 @@ class httpresponse:
 			cookiedata = cookie_file.readlines()
 			for entryNo in range(len(cookiedata)):
 				if self.headers['Cookie'] in cookiedata[entryNo]:
-					print("innnnnnnnnn")
 					cookie, count = cookiedata[entryNo].split(':')
 					cookiedata[entryNo] = cookie + ': ' + str(int(count.strip()) + 1)+'\n'
 					break
@@ -648,3 +621,4 @@ class httpresponse:
 			cookie_file = open(DOCUMENT_ROOT+'/cookie.txt','w')
 			cookie_file.writelines(cookiedata)
 			cookie_file.close()
+
